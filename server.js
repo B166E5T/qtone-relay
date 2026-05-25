@@ -9,7 +9,6 @@ app.all("*", (req, res) => {
   const target = req.headers["x-target-url"];
   if (!target) return res.status(400).send("Missing target");
 
-  // Log each request (visible in Render dashboard logs)
   const parsed = new URL(target);
   console.log(`[${new Date().toISOString()}] ${parsed.hostname}${parsed.pathname}`);
 
@@ -29,6 +28,7 @@ app.all("*", (req, res) => {
       let body = "";
       proxyRes.on("data", (chunk) => (body += chunk));
       proxyRes.on("end", () => {
+        if (res.headersSent) return;
         console.log(`  -> ${proxyRes.statusCode} (${body.length} bytes)`);
         res.set("Content-Type", "application/json");
         res.status(proxyRes.statusCode).send(body);
@@ -37,11 +37,13 @@ app.all("*", (req, res) => {
   );
 
   proxyReq.on("error", (e) => {
+    if (res.headersSent) return;
     console.log(`  -> ERROR: ${e.message}`);
     res.status(502).send("Proxy error: " + e.message);
   });
   proxyReq.setTimeout(15000, () => {
     proxyReq.destroy();
+    if (res.headersSent) return;
     console.log(`  -> TIMEOUT`);
     res.status(504).send("Timeout");
   });
